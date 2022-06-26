@@ -1,0 +1,8 @@
+prefix=/home/cec99/catkin_ws/devel
+
+Name: collision_avoidance
+Description: Description of collision_avoidance
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: roscpp rospy std_msgs tf laser_geometry
