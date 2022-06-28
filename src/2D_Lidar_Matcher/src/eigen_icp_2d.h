@@ -18,13 +18,13 @@ protected:
       _moving(moving_){};
     
     PointPair(){}
-    Vector2f _fixed;
-    Vector2f _moving;
+    Vector2f _fixed; //the point in the fixed cloud
+    Vector2f _moving; //the point in the moving cloud
   };
-  using PointPairVector=std::vector<PointPair, Eigen::aligned_allocator<PointPair>>;
+  using PointPairVector=std::vector<PointPair, Eigen::aligned_allocator<PointPair>>; //this is the declaration of a class/object that is a vector of 	PointPairs => vector of correspondeces 
 
 public:
-  using ContainerType=std::vector<Vector2f, Eigen::aligned_allocator<Vector2f> >;
+  using ContainerType=std::vector<Vector2f, Eigen::aligned_allocator<Vector2f> >; 
   
   ICP(Eigen::Isometry2f BTL_,
       Eigen::Isometry2f MTL_,
