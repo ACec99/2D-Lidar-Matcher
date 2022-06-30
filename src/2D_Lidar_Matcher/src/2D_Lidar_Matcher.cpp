@@ -31,7 +31,7 @@ ros::Subscriber vel_sub;
 
 const Eigen::Isometry2f getTransform(const std::string& from, const std::string& to) {
 	
-  Eigen::Isometry2f MTB = Eigen::Isometry2f::Identity();
+  Eigen::Isometry2f Transformation = Eigen::Isometry2f::Identity();
   
   if(tfBuffer.canTransform(from, to, ros::Time(0))){
     geometry_msgs::TransformStamped transformStamped=tfBuffer.lookupTransform(from, to, ros::Time(0));
@@ -42,18 +42,27 @@ const Eigen::Isometry2f getTransform(const std::string& from, const std::string&
     m.getRPY(roll, pitch, yaw);
     auto tr = transformStamped.transform.translation;
     //take the translation and rotation 
-    MTB.linear()=Rtheta(yaw); 
-    MTB.translation()=Vector2f(tr.x, tr.y);
+    Transformation.linear()=Rtheta(yaw); 
+    Transformation.translation()=Vector2f(tr.x, tr.y);
   }
   else{
     std::cerr << "cannot transform correctly" << endl;
   }
   cerr << from << "->" << to << endl;
-  cerr << MTB.matrix() << endl;
-  return MTB;
+  cerr << Transformation.matrix() << endl;
+  return Transformation;
 }
 
-void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {}
+void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
+	//for a sensor_msgs::LaserScan we have:
+	//float32 angle_min = start angle of the scan [rad]
+	//float32 angle_max = end angle of the scan [rad]
+	//float32 angle_increment = angular distance between measurements [rad]
+	float angle_min = scan_in.angle_min;
+	float angle_max = scan_in.angle_max;
+	float angle_increment = scan_in.angle_increment;
+	float range = std::ceil((angle_max-angle_min)/angle_increment); //in this way I have calculated the value of the angular distance of each sample
+	}
 
 int main(int argc, char **argv) {
 	
