@@ -27,6 +27,7 @@ public:
   using ContainerType=std::vector<Vector2f, Eigen::aligned_allocator<Vector2f> >; 
   
   ICP(Eigen::Isometry2f BTL_,
+      Eigen::Isometry2f MTB_,
       Eigen::Isometry2f MTL_,
       int min_points_in_leaf,
       const int& size, 
@@ -47,7 +48,7 @@ public:
       Eigen::Isometry2f& X()  {return _X;}
   
       // The pose of the base_link frame wrt map frame.
-      Eigen::Isometry2f MTB() const {return _MTL*(_BTL.inverse());}
+      Eigen::Isometry2f MTB() const {return _MTB;}
       void updateMTL() {_MTL=_MTL*_X;}; //update the isometry
       const ContainerType& old_scan() const {return _fixed;} //old scan starting from base frame
       ContainerType& old_scan()  {return _fixed;}
@@ -62,7 +63,7 @@ public:
      
        } //change the old one with the new one
       
-       void setVal(const int ok, const int idx, Eigen::Vector2f value){
+       void ValuesInsertion(bool ok, const int idx, Eigen::Vector2f value){
        if(ok)
          _moving[idx]=value;
        else
@@ -83,6 +84,9 @@ protected:
   Eigen::Isometry2f _X=Eigen::Isometry2f::Identity();
  
   Eigen::Isometry2f _BTL; //The pose of the laser_frame wrt base_link
+
+  Eigen::Isometry2f _MTB; //The pose of the base_frame wrt map
+  
 
   Eigen::Isometry2f _MTL;  //The pose of the laser_frame wrt map.
   std::unique_ptr<TreeNodeType>  _kd_tree;

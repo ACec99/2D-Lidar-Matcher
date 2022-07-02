@@ -29,6 +29,10 @@ ros::Publisher vel_pub ;
 
 ros::Subscriber vel_sub;
 
+int num_groups = 0;
+
+bool move;
+
 const Eigen::Isometry2f getTransform(const std::string& from, const std::string& to) {
 	
   Eigen::Isometry2f Transformation = Eigen::Isometry2f::Identity();
@@ -57,12 +61,48 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	//for a sensor_msgs::LaserScan we have:
 	//float32 angle_min = start angle of the scan [rad]
 	//float32 angle_max = end angle of the scan [rad]
-	//float32 angle_increment = angular distance between measurements [rad]
+	//float32 angle_increment = angular distance between measurements [rad] = angular distance between consecutive different value of ranges ( ex. angular distance between ranges[i] and ranges[i+1])
 	float angle_min = scan_in.angle_min;
 	float angle_max = scan_in.angle_max;
 	float angle_increment = scan_in.angle_increment;
-	float range = std::ceil((angle_max-angle_min)/angle_increment); //in this way I have calculated the value of the angular distance of each sample
+	float size = std::ceil((angle_max-angle_min)/angle_increment); //in this way I have calculated the value of the angular distance of each sample
+	float[] angular_range = scan_in.ranges;
+	
+	Eigen::Isometry2f MTB=getTransform("map","base_link");
+    Eigen::Isometry2f BTL=getTransform("base_link","base_laser_link");
+    Eigen::Isometry2f MTL = MTB*BTL;
+	
+	if (num_groups == 0) {
+		ICPLaser = std::unique_ptr<ICP>(new ICP(BTL,MTB,MTL,20,size,draw));
+		move = true;
 	}
+	else {
+		move = false;
+	}
+	float angle;
+	int idx=0;
+	for (int i=0; i<size; i++) {
+		float value = angular_range[i];
+		angle += angle_increment;
+		float val_x = value*cos(angle);
+		float val_y = value*sin(angle);
+		ICPLaser->ValuesInsertion(move,idx,Eigen::Vector2f(a,b));
+		idx++;
+	}
+	num_groups += 1;
+	if ( num_groups == 1 ) { //this because if we still have only one group (a moving group of points) we cannot make nothing. 
+		return;
+	}
+	ICPLaser->run(5); //here run the ICP
+	ICPLaser->updateMTL(); //here we update the isometry 
+	
+	
+	geometry_msgs::Pose2D::Ptr vel_pose;
+	vel_pose->x = (ICPLaser->MTB()).translation()(0);
+	vel_pose->y = (ICPLaser->MTB()).translation()(1);
+	vel_pose->theta = Eigen::Rotation2Df((ICPLaser->MTB()).rotation()).angle();
+	vel_pub.publish(vel_pose); //here we publish the pose2D
+}
 
 int main(int argc, char **argv) {
 	
@@ -70,9 +110,11 @@ int main(int argc, char **argv) {
 	
 	ros::NodeHandle n; //initialization of a node
 	
+	//RICORDATI! alla fine prova a mettere ros::Rate loop_rate(10); e vedi se le prestazioni sono migliori
+	
 	vel_sub = n.subscribe("/base_scan",1000,LaserCallBack); //I read the lasercan and update the Pose2D
 																					
-	vel_pub = n.advertise<geometry_msgs::Pose2D>("/pose2D", 1000); //I write on the /pose2D topic the correct coordinates 
+	vel_pub = n.advertise<geometry_msgs::Pose2D>("/pose2D", 1000); //I write on the /pose2D topic the coordinates of the position of the robot 
 	
 	ros::spin(); //if you are subscribing to messages, services or actions, you must call spin to process the event
 	
