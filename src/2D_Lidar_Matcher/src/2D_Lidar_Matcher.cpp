@@ -34,27 +34,27 @@ int num_groups = 0;
 bool move;
 
 const Eigen::Isometry2f getTransform(const std::string& from, const std::string& to) {
-	
-  Eigen::Isometry2f Transformation = Eigen::Isometry2f::Identity();
-  
-  if(tfBuffer.canTransform(from, to, ros::Time(0))){
-    geometry_msgs::TransformStamped transformStamped=tfBuffer.lookupTransform(from, to, ros::Time(0));
-    tf2::Quaternion q;
-    tf2::convert(transformStamped.transform.rotation , q);
-    tf2::Matrix3x3 m(q);
-    double roll, pitch, yaw;
-    m.getRPY(roll, pitch, yaw);
-    auto tr = transformStamped.transform.translation;
-    //take the translation and rotation 
-    Transformation.linear()=Rtheta(yaw); 
-    Transformation.translation()=Vector2f(tr.x, tr.y);
-  }
-  else{
-    std::cerr << "cannot transform correctly" << endl;
-  }
-  cerr << from << "->" << to << endl;
-  cerr << Transformation.matrix() << endl;
-  return Transformation;
+	//this will give us the coordinate of the child frame in the parent frame
+	Eigen::Isometry2f Transformation = Eigen::Isometry2f::Identity();
+	tf2_ros::TransformListener listener;
+	if(listener.canTransform(from, to, ros::Time(0))){
+		geometry_msgs::TransformStamped transformStamped=listener.lookupTransform(from, to, ros::Time(0)); //this operation "look up" the updated transform
+		tf2::Quaternion q;
+		tf2::convert(transformStamped.transform.rotation , q);
+		tf2::Matrix3x3 m(q);
+		double roll, pitch, yaw;
+		m.getRPY(roll, pitch, yaw);
+		auto tr = transformStamped.transform.translation;
+		//take the translation and rotation 
+		Transformation.linear()=Rtheta(yaw); 
+		Transformation.translation()=Vector2f(tr.x, tr.y);
+	}
+	else{
+		std::cerr << "cannot transform correctly" << endl;
+	}
+	cerr << from << "->" << to << endl;
+	cerr << Transformation.matrix() << endl;
+	return Transformation;
 }
 
 void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
@@ -96,12 +96,38 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	ICPLaser->run(5); //here run the ICP
 	ICPLaser->updateMTL(); //here we update the isometry 
 	
-	
+	//now we have to acquire the pose and pusblish it
 	geometry_msgs::Pose2D::Ptr vel_pose;
 	vel_pose->x = (ICPLaser->MTB()).translation()(0);
 	vel_pose->y = (ICPLaser->MTB()).translation()(1);
 	vel_pose->theta = Eigen::Rotation2Df((ICPLaser->MTB()).rotation()).angle();
 	vel_pub.publish(vel_pose); //here we publish the pose2D
+	
+	//now we want to be able to show/read the different transformations (in relation to the changing in position) of the robot => 
+	//we can do this in the odom frame (=through the odometry system). So, we have to make a transformation from /map to /odom
+	
+	Eigen::Isometry2f OTB = getTransform("/odom","/base_link");
+	Eigen::Isometry2f BTO = OTB.inverse();
+	Eigen::Isometry2f MTO = (ICPLaser->MTB())*BTO;
+	
+	static tf2_ros::TransformBroadcaster br;
+	geometry_msgs::TransformStamped transformStamped;
+	
+	transformStamped.header.stamp = ros::Time::now();
+	transformStamped.header.frame_id = "/map";
+	transformStamped.child_frame_id = "/odom";
+	//here (in these two following assignements) we have to put the forward transform between /map and /odom
+	transformStamped.transform.translation.x = MTO.translation()(0);
+	transformStamped.transform.translation.y = MTO.translation()(1);
+	//
+	transformStamped.transform.translation.z = 0.0;
+	tf2::Quaternion q;
+	q.setRPY(0, 0, msg->theta);
+	transformStamped.transform.rotation.x = q.x();
+	transformStamped.transform.rotation.y = q.y();
+	transformStamped.transform.rotation.z = q.z();
+	transformStamped.transform.rotation.w = q.w(); 
+	br.sendTransform(transformStamped);
 }
 
 int main(int argc, char **argv) {
