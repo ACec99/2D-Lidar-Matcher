@@ -1,0 +1,8 @@
+prefix=/home/cec99/Scrivania/prog_rp_2022/install
+
+Name: lidar_matcher
+Description: Description of lidar_matcher
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

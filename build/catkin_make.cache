@@ -1,2 +1,2 @@
-beginner_tutorials:collision_avoidance
--DCATKIN_DEVEL_PREFIX=/home/cec99/catkin_ws/devel -DCMAKE_INSTALL_PREFIX=/home/cec99/catkin_ws/install -G Unix Makefiles
+lidar_matcher
+-DCATKIN_DEVEL_PREFIX=/home/cec99/Scrivania/prog_rp_2022/devel -DCMAKE_INSTALL_PREFIX=/home/cec99/Scrivania/prog_rp_2022/install -G Unix Makefiles
