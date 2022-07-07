@@ -48,6 +48,7 @@ public:
   
       // The pose of the base_link frame wrt map frame.
       Eigen::Isometry2f MTB() const {return _MTB;}
+      //Eigen::Isometry2f MTB() const {return _MTL*(_BTL.inverse());}
       void updateMTL() {_MTL=_MTL*_X;}; //update the isometry
       const ContainerType& old_scan() const {return _fixed;} //old scan starting from base frame
       ContainerType& old_scan()  {return _fixed;}
@@ -100,3 +101,5 @@ protected:
   int _num_inliers=0;
   Eigen::Matrix<float, 3,1> _dx;
 };
+
+

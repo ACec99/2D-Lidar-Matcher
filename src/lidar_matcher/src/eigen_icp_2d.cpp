@@ -100,18 +100,16 @@ void ICP::run(int max_iterations) {
   _kd_tree.reset();
    _kd_tree = std::unique_ptr<TreeNodeType>(new TreeNodeType(_fixed.begin(), _fixed.end(), _min_points_in_leaf)); //initialize the kd_tree
    _X=Eigen::Isometry2f::Identity();
-  for ( int current_iteration=0; current_iteration<max_iterations; current_iteration+=1) {
+  for ( int current_iteration=0; current_iteration <= max_iterations; current_iteration+=1) {
     computeCorrespondences();
     optimizeCorrespondences();
-    draw(cout);
-    current_iteration += 1;
+    //draw(cout);
     cerr << "Iteration: " << current_iteration;
     cerr << " corr: " << numCorrespondences();
     cerr << " inl: " << numInliers();
     cerr << " ker: " << numKernelized();
     cerr << " chi: " << _chi2_sum << endl;
+    //++current_iteration;
   }
   return;
 }
-
-

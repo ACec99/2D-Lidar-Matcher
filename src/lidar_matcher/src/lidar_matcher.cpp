@@ -29,18 +29,19 @@ ros::Publisher vel_pub ;
 
 std::unique_ptr<ICP> ICPLaser;
 
+tf2_ros::Buffer listener;
+
 int num_groups = 0;
 
 bool Fixed_or_Moving = false;
 
+bool moves = false;
+
 const Eigen::Isometry2f getTransform(const std::string& from, const std::string& to) {
 	//this will give us the coordinate of the child frame in the parent frame
 	Eigen::Isometry2f Transformation = Eigen::Isometry2f::Identity();
-	tf2_ros::Buffer listener;
-	tf2_ros::TransformListener tfListene(listener);
 	geometry_msgs::TransformStamped transformStamped;
-	//try {
-	if(listener.canTransform(from, to, ros::Time(0))){
+	try {
 		transformStamped = listener.lookupTransform(from, to, ros::Time(0)); //this operation "look up" the updated transform
 		tf2::Quaternion q;
 		tf2::convert(transformStamped.transform.rotation , q);
@@ -52,15 +53,18 @@ const Eigen::Isometry2f getTransform(const std::string& from, const std::string&
 		Transformation.linear()=Rtheta(yaw); 
 		Transformation.translation()=Vector2f(tr.x, tr.y);
 	}
-	else {
-	//catch ( tf::TransformException& e ) {
-		//std::cout << e.what();
+	catch ( tf::TransformException& e ) {
+		std::cout << e.what();
 		//ros::Duration(1.0).sleep();
-		//std::cerr << "cannot transform correctly" << endl;
+		std::cerr << "cannot transform correctly" << endl;
 	}
-	//cerr << from << "->" << to << endl;
-	//cerr << Transformation.matrix() << endl;
+	cerr << from << "->" << to << endl;
+	cerr << Transformation.matrix() << endl;
 	return Transformation;
+}
+	
+void MapTest(const geometry_msgs::Twist::ConstPtr& msg) {
+	moves = true;
 }
 
 void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
@@ -71,9 +75,9 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	float angle_min = scan_in->angle_min;
 	float angle_max = scan_in->angle_max;
 	float angle_increment = scan_in->angle_increment;
-	float size = std::ceil((angle_max-angle_min)/angle_increment/2); //in this way I have calculated the value of the angular distance of each sample
+	float size = std::ceil((angle_max-angle_min)/angle_increment); //in this way I have calculated the value of the angular distance of each sample
 	
-	//cerr << "this is the current num_groups" << num_groups << endl;
+	cerr << "this is the current num_groups" << num_groups << endl;
 	
 	if (num_groups == 0) {
 		Eigen::Isometry2f MTB=getTransform("map","base_link");
@@ -82,14 +86,18 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 		ICPLaser = std::unique_ptr<ICP>(new ICP(BTL,MTB,MTL,20,size));
 		Fixed_or_Moving = true;
 	}
-	else {
+	else if ( num_groups == 1 ) {
 		Fixed_or_Moving = false;
 	}
-	float angle;
+	else {
+		ICPLaser->updateOld();
+		Fixed_or_Moving = false;
+	}
+	float angle = angle_min;
 	int idx=0;
 	for (int i=0; i<size; i++) {
-		float value = scan_in->ranges[i*2];
-		angle += angle_increment*2;
+		float value = scan_in->ranges[i];
+		angle += angle_increment;
 		float val_x = value*cos(angle);
 		float val_y = value*sin(angle);
 		ICPLaser->ValuesInsertion(Fixed_or_Moving,idx,Eigen::Vector2f(val_x,val_y));
@@ -99,30 +107,34 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	if ( num_groups == 1 ) { //this because if we still have only one group (a moving group of points) we cannot make nothing. 
 		return;
 	}
-	//cerr << "start the running of the ICP" << endl;
-	ICPLaser->run(3); //here run the ICP
-	//cerr << "the ICP is done" << endl;
 	
-	ICPLaser->updateMTL(); //here we update the isometry 
+	if ( moves == true ) {
+		cerr << "start the running of the ICP" << endl;
+		ICPLaser->run(5); //here run the ICP
+		cerr << "the ICP is done" << endl;
+		ICPLaser->updateMTL(); //here we update the isometry 
+	}
+	Eigen::Isometry2f MTB = ICPLaser->MTB();
+	cerr << "Matrix MTB (map to base_link) computed" << endl;
+	cerr << MTB.matrix() << endl;
 	
 	//now we have to acquire the pose and pusblish it
 	geometry_msgs::Pose2D::Ptr vel_pose;
 	vel_pose = boost::make_shared<geometry_msgs::Pose2D>();
-	vel_pose->x = (ICPLaser->MTB()).translation()(0);
-	vel_pose->y = (ICPLaser->MTB()).translation()(1);
-	vel_pose->theta = Eigen::Rotation2Df((ICPLaser->MTB()).rotation()).angle();
+	vel_pose->x = MTB.translation()(0);
+	vel_pose->y = MTB.translation()(1);
+	vel_pose->theta = Eigen::Rotation2Df(MTB.rotation()).angle();
 	vel_pub.publish(vel_pose); //here we publish the pose2D
 	
 	//now we want to be able to show/read the different transformations (in relation to the changing in position) of the robot => 
 	//we can do this in the odom frame (=through the odometry system). So, we have to make a transformation from /map to /odom
-	
+
 	Eigen::Isometry2f OTB = getTransform("odom","base_link");
 	Eigen::Isometry2f BTO = OTB.inverse();
-	Eigen::Isometry2f MTO = (ICPLaser->MTB())*BTO;
+	Eigen::Isometry2f MTO = MTB*BTO;
 	
-	//cerr << "Matrix MTO (= map to odom) computed" << endl;
-	//cerr<< MTO.matrix()<<endl;
-	
+	cerr << "Matrix MTO (= map to odom) computed" << endl;
+	cerr<< MTO.matrix()<<endl;
 	static tf2_ros::TransformBroadcaster br;
 	geometry_msgs::TransformStamped ts;
 	
@@ -140,6 +152,19 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	ts.transform.rotation.y = q.y();
 	ts.transform.rotation.z = q.z();
 	ts.transform.rotation.w = q.w(); 
+	
+	/*if ( ts.transform.translation.x == ts_old.transform.translation.x && ts.transform.translation.y == ts_old.transform.translation.y && ts.transform.translation.z == ts_old.transform.translation.z
+	&& ts.transform.rotation.x == ts_old.transform.rotation.x && ts.transform.rotation.y == ts_old.transform.rotation.y
+	&& ts.transform.rotation.z == ts_old.transform.rotation.z && ts.transform.rotation.w == ts_old.transform.rotation.w ) {
+		return;
+	}
+	ts_old.transform.translation.x = ts.transform.translation.x;
+	ts_old.transform.translation.y == ts.transform.translation.y;
+	ts_old.transform.translation.z == ts.transform.translation.z;
+	ts_old.transform.rotation.x == ts.transform.rotation.x;
+	ts_old.transform.rotation.y == ts.transform.rotation.y;
+	ts_old.transform.rotation.z == ts.transform.rotation.z;
+	ts_old.transform.rotation.w == ts.transform.rotation.w;*/
 	br.sendTransform(ts); 
 }
 
@@ -151,9 +176,15 @@ int main(int argc, char **argv) {
 	
 	//ros::Rate loop_rate(10);
 	
+	ros::Subscriber vel_sub_old = n.subscribe("/odom",1000,MapTest);
+	
 	vel_pub = n.advertise<geometry_msgs::Pose2D>("/pose2D", 1000); //I write on the /pose2D topic the coordinates of the position of the robot 
 	
+	tf2_ros::TransformListener tfListene(listener);
+	
+	//ROS_INFO("Sono prima del vel_sub");
 	ros::Subscriber vel_sub = n.subscribe("/base_scan",1000,LaserCallBack); //I read the lasercan and update the Pose2D
+	//ROS_INFO("Sono dopo il vel_sub");
 	
 	ros::spin(); //if you are subscribing to messages, services or actions, you must call spin to process the event
 	
@@ -161,4 +192,5 @@ int main(int argc, char **argv) {
 	
 	return 0;
 }
+
 
