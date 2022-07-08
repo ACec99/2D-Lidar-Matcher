@@ -8,7 +8,6 @@ using namespace std;
 using ContainerType = std::vector<Vector2f, Eigen::aligned_allocator<Vector2f> >;
 using TreeNodeType = TreeNode_<typename ContainerType::iterator>;
 ICP::ICP(Eigen::Isometry2f BTL_,
-      Eigen::Isometry2f MTB_,
       Eigen::Isometry2f MTL_,
       int min_points_in_leaf,
       const int& size):
@@ -16,7 +15,6 @@ ICP::ICP(Eigen::Isometry2f BTL_,
   _moving(size),
   _min_points_in_leaf(min_points_in_leaf),
   _BTL(BTL_),
-  _MTB(MTB_),
   _MTL(MTL_) {
   _correspondences.reserve(std::max(_fixed.size(),_moving.size()));
 }

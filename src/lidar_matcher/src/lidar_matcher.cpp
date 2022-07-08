@@ -35,8 +35,6 @@ int num_groups = 0;
 
 bool Fixed_or_Moving = false;
 
-bool moves = false;
-
 const Eigen::Isometry2f getTransform(const std::string& from, const std::string& to) {
 	//this will give us the coordinate of the child frame in the parent frame
 	Eigen::Isometry2f Transformation = Eigen::Isometry2f::Identity();
@@ -63,9 +61,7 @@ const Eigen::Isometry2f getTransform(const std::string& from, const std::string&
 	return Transformation;
 }
 	
-void MapTest(const geometry_msgs::Twist::ConstPtr& msg) {
-	moves = true;
-}
+
 
 void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	//for a sensor_msgs::LaserScan we have:
@@ -76,14 +72,12 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	float angle_max = scan_in->angle_max;
 	float angle_increment = scan_in->angle_increment;
 	float size = std::ceil((angle_max-angle_min)/angle_increment); //in this way I have calculated the value of the angular distance of each sample
-	
 	cerr << "this is the current num_groups" << num_groups << endl;
-	
 	if (num_groups == 0) {
 		Eigen::Isometry2f MTB=getTransform("map","base_link");
 		Eigen::Isometry2f BTL=getTransform("base_link","base_laser_link");
 		Eigen::Isometry2f MTL = MTB*BTL;
-		ICPLaser = std::unique_ptr<ICP>(new ICP(BTL,MTB,MTL,20,size));
+		ICPLaser = std::unique_ptr<ICP>(new ICP(BTL,MTL,20,size));
 		Fixed_or_Moving = true;
 	}
 	else if ( num_groups == 1 ) {
@@ -93,13 +87,15 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 		ICPLaser->updateOld();
 		Fixed_or_Moving = false;
 	}
-	float angle = angle_min;
+	int angle = angle_min;
 	int idx=0;
 	for (int i=0; i<size; i++) {
 		float value = scan_in->ranges[i];
 		angle += angle_increment;
 		float val_x = value*cos(angle);
 		float val_y = value*sin(angle);
+		//cerr << "Sono VAL_X" << val_x << endl;
+		//cerr << "Sono VAL_Y" << val_y << endl;
 		ICPLaser->ValuesInsertion(Fixed_or_Moving,idx,Eigen::Vector2f(val_x,val_y));
 		idx ++;
 	}
@@ -107,13 +103,10 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	if ( num_groups == 1 ) { //this because if we still have only one group (a moving group of points) we cannot make nothing. 
 		return;
 	}
-	
-	if ( moves == true ) {
-		cerr << "start the running of the ICP" << endl;
-		ICPLaser->run(5); //here run the ICP
-		cerr << "the ICP is done" << endl;
-		ICPLaser->updateMTL(); //here we update the isometry 
-	}
+	cerr << "start the running of the ICP" << endl;
+	ICPLaser->run(5); //here run the ICP
+	cerr << "the ICP is done" << endl;
+	ICPLaser->updateMTL(); //here we update the isometry 
 	Eigen::Isometry2f MTB = ICPLaser->MTB();
 	cerr << "Matrix MTB (map to base_link) computed" << endl;
 	cerr << MTB.matrix() << endl;
@@ -121,6 +114,14 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	//now we have to acquire the pose and pusblish it
 	geometry_msgs::Pose2D::Ptr vel_pose;
 	vel_pose = boost::make_shared<geometry_msgs::Pose2D>();
+	//With boost::make_shared() you can create a smart pointer of type boost::shared_ptr 
+	//without having to calling the constructor of boost::shared_ptr yourself.
+	//The advantage of boost::make_shared() is that the memory for the object that has to 
+	//be allocated dynamically and the memory for the reference counter used by the smart 
+	//pointer internally can be reserved in one chunk. 
+	//Using boost::make_shared() is more efficient than calling new to create a dynamically 
+	//allocated object and calling new again in the constructor of boost::shared_ptr to allocate memory for the reference counter.
+
 	vel_pose->x = MTB.translation()(0);
 	vel_pose->y = MTB.translation()(1);
 	vel_pose->theta = Eigen::Rotation2Df(MTB.rotation()).angle();
@@ -152,19 +153,6 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	ts.transform.rotation.y = q.y();
 	ts.transform.rotation.z = q.z();
 	ts.transform.rotation.w = q.w(); 
-	
-	/*if ( ts.transform.translation.x == ts_old.transform.translation.x && ts.transform.translation.y == ts_old.transform.translation.y && ts.transform.translation.z == ts_old.transform.translation.z
-	&& ts.transform.rotation.x == ts_old.transform.rotation.x && ts.transform.rotation.y == ts_old.transform.rotation.y
-	&& ts.transform.rotation.z == ts_old.transform.rotation.z && ts.transform.rotation.w == ts_old.transform.rotation.w ) {
-		return;
-	}
-	ts_old.transform.translation.x = ts.transform.translation.x;
-	ts_old.transform.translation.y == ts.transform.translation.y;
-	ts_old.transform.translation.z == ts.transform.translation.z;
-	ts_old.transform.rotation.x == ts.transform.rotation.x;
-	ts_old.transform.rotation.y == ts.transform.rotation.y;
-	ts_old.transform.rotation.z == ts.transform.rotation.z;
-	ts_old.transform.rotation.w == ts.transform.rotation.w;*/
 	br.sendTransform(ts); 
 }
 
@@ -173,10 +161,6 @@ int main(int argc, char **argv) {
 	ros::init(argc, argv, "lidar_matcher");
 	
 	ros::NodeHandle n; //initialization of a node
-	
-	//ros::Rate loop_rate(10);
-	
-	ros::Subscriber vel_sub_old = n.subscribe("/odom",1000,MapTest);
 	
 	vel_pub = n.advertise<geometry_msgs::Pose2D>("/pose2D", 1000); //I write on the /pose2D topic the coordinates of the position of the robot 
 	
@@ -187,8 +171,6 @@ int main(int argc, char **argv) {
 	//ROS_INFO("Sono dopo il vel_sub");
 	
 	ros::spin(); //if you are subscribing to messages, services or actions, you must call spin to process the event
-	
-	//loop_rate.sleep();
 	
 	return 0;
 }
