@@ -13,4 +13,4 @@ export PKG_CONFIG_PATH="/home/cec99/Scrivania/prog_rp_2022/devel/lib/pkgconfig:$
 export PWD='/home/cec99/Scrivania/prog_rp_2022/build'
 export PYTHONPATH="/home/cec99/Scrivania/prog_rp_2022/devel/lib/python2.7/dist-packages:$PYTHONPATH"
 export ROSLISP_PACKAGE_DIRECTORIES='/home/cec99/Scrivania/prog_rp_2022/devel/share/common-lisp'
-export ROS_PACKAGE_PATH="/home/cec99/catkin_ws/src:/home/cec99/Scrivania/prog_rp_2022/src:$ROS_PACKAGE_PATH"
+export ROS_PACKAGE_PATH="/home/cec99/catkin_ws/src:/home/cec99/Scrivania/prog_rp_2022/src:/home/cec99/prog_rp_2022/src:$ROS_PACKAGE_PATH"

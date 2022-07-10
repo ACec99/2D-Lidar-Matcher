@@ -33,8 +33,6 @@ tf2_ros::Buffer listener;
 
 int num_groups = 0;
 
-bool Fixed_or_Moving = false;
-
 const Eigen::Isometry2f getTransform(const std::string& from, const std::string& to) {
 	//this will give us the coordinate of the child frame in the parent frame
 	Eigen::Isometry2f Transformation = Eigen::Isometry2f::Identity();
@@ -50,18 +48,16 @@ const Eigen::Isometry2f getTransform(const std::string& from, const std::string&
 		//take the translation and rotation 
 		Transformation.linear()=Rtheta(yaw); 
 		Transformation.translation()=Vector2f(tr.x, tr.y);
+		cerr << "transformation" << from << "->" << to << "done" << endl;
 	}
 	catch ( tf::TransformException& e ) {
 		std::cout << e.what();
 		//ros::Duration(1.0).sleep();
 		std::cerr << "cannot transform correctly" << endl;
 	}
-	cerr << from << "->" << to << endl;
-	cerr << Transformation.matrix() << endl;
+	//cerr << Transformation.matrix() << endl;
 	return Transformation;
 }
-	
-
 
 void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	//for a sensor_msgs::LaserScan we have:
@@ -72,7 +68,8 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	float angle_max = scan_in->angle_max;
 	float angle_increment = scan_in->angle_increment;
 	float size = std::ceil((angle_max-angle_min)/angle_increment); //in this way I have calculated the value of the angular distance of each sample
-	cerr << "this is the current num_groups" << num_groups << endl;
+	//cerr << "this is the current num_groups" << num_groups << endl;
+	bool Fixed_or_Moving;
 	if (num_groups == 0) {
 		Eigen::Isometry2f MTB=getTransform("map","base_link");
 		Eigen::Isometry2f BTL=getTransform("base_link","base_laser_link");
@@ -92,12 +89,10 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	for (int i=0; i<size; i++) {
 		float value = scan_in->ranges[i];
 		angle += angle_increment;
+		idx ++;
 		float val_x = value*cos(angle);
 		float val_y = value*sin(angle);
-		//cerr << "Sono VAL_X" << val_x << endl;
-		//cerr << "Sono VAL_Y" << val_y << endl;
 		ICPLaser->ValuesInsertion(Fixed_or_Moving,idx,Eigen::Vector2f(val_x,val_y));
-		idx ++;
 	}
 	num_groups += 1;
 	if ( num_groups == 1 ) { //this because if we still have only one group (a moving group of points) we cannot make nothing. 
@@ -107,9 +102,8 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	ICPLaser->run(5); //here run the ICP
 	cerr << "the ICP is done" << endl;
 	ICPLaser->updateMTL(); //here we update the isometry 
+	
 	Eigen::Isometry2f MTB = ICPLaser->MTB();
-	cerr << "Matrix MTB (map to base_link) computed" << endl;
-	cerr << MTB.matrix() << endl;
 	
 	//now we have to acquire the pose and pusblish it
 	geometry_msgs::Pose2D::Ptr vel_pose;
@@ -121,7 +115,6 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	//pointer internally can be reserved in one chunk. 
 	//Using boost::make_shared() is more efficient than calling new to create a dynamically 
 	//allocated object and calling new again in the constructor of boost::shared_ptr to allocate memory for the reference counter.
-
 	vel_pose->x = MTB.translation()(0);
 	vel_pose->y = MTB.translation()(1);
 	vel_pose->theta = Eigen::Rotation2Df(MTB.rotation()).angle();
@@ -134,8 +127,9 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	Eigen::Isometry2f BTO = OTB.inverse();
 	Eigen::Isometry2f MTO = MTB*BTO;
 	
-	cerr << "Matrix MTO (= map to odom) computed" << endl;
-	cerr<< MTO.matrix()<<endl;
+	cerr << "Matrix MTO " << endl;
+	cerr << MTO.matrix() << endl;
+
 	static tf2_ros::TransformBroadcaster br;
 	geometry_msgs::TransformStamped ts;
 	
@@ -171,8 +165,10 @@ int main(int argc, char **argv) {
 	//ROS_INFO("Sono dopo il vel_sub");
 	
 	ros::spin(); //if you are subscribing to messages, services or actions, you must call spin to process the event
+	ros::shutdown();
 	
 	return 0;
 }
+
 
 
