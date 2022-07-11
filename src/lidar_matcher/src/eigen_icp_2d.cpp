@@ -5,8 +5,6 @@
 #include <iostream>
 #include <fstream>
 using namespace std;
-using ContainerType = std::vector<Vector2f, Eigen::aligned_allocator<Vector2f> >;
-using TreeNodeType = TreeNode_<typename ContainerType::iterator>;
 ICP::ICP(Eigen::Isometry2f BTL_,
       Eigen::Isometry2f MTL_,
       int min_points_in_leaf,
@@ -19,22 +17,21 @@ ICP::ICP(Eigen::Isometry2f BTL_,
   _correspondences.reserve(std::max(_fixed.size(),_moving.size()));
 }
 
-void ICP::computeCorrespondences(){
+void ICP::computeCorrespondences() {
   int k=0;
   _correspondences.resize(_moving.size());
-  for(const auto& m:_moving){
-    const auto&  m_prime=_X*m;
-    auto ft=_kd_tree->bestMatchFast(m_prime,_ball_radius);
-    if(!ft)
+  for (const auto& m: _moving) {
+    const auto& mt=_X*m;
+    auto ft=_kd_tree->bestMatchFast(mt, _ball_radius);
+    if (! ft)
       continue;
-    else
-      _correspondences[k]._fixed=*ft; //it's a list
-      _correspondences[k]._moving=m_prime;
-       ++k;
-     }
+    _correspondences[k]._fixed=*ft;
+    _correspondences[k]._moving=mt;
+    ++k;
+  }
   _correspondences.resize(k);
-
 }
+ 
 
 void ICP::draw(std::ostream& os) {
   os << "set size ratio -1" << endl;
@@ -55,15 +52,13 @@ void ICP::draw(std::ostream& os) {
 void ICP::optimizeCorrespondences() {
   Eigen::Matrix<float, 3, 3> H;
   Eigen::Matrix<float, 3, 1> b;
-  
   H.setZero();
   b.setZero();
   Eigen::Matrix<float, 2, 3> J;
-   J.block<2,3>(0,0).setIdentity();
+  J.block<2,3>(0,0).setIdentity();
   _num_kernelized=0;
   _num_inliers=0;
   _chi2_sum=0;
- 
   for (const auto& c: _correspondences) {
     const auto& f=c._fixed;
     const auto& m=c._moving;
@@ -89,13 +84,10 @@ void ICP::optimizeCorrespondences() {
   dX.linear()=dR;
   dX.translation()=_dx.block<2,1>(0,0);
   _X=dX*_X;
-  //cerr << "_X matrix: " << endl;
-  //cerr << _X.matrix() << endl;
-  
 }
 
 void ICP::run(int max_iterations) {
-  _kd_tree.reset();
+  //_kd_tree.reset();
    _kd_tree = std::unique_ptr<TreeNodeType>(new TreeNodeType(_fixed.begin(), _fixed.end(), _min_points_in_leaf)); //initialize the kd_tree
    _X=Eigen::Isometry2f::Identity();
    int current_iteration=0;
@@ -111,6 +103,10 @@ void ICP::run(int max_iterations) {
     cerr << " chi: " << _chi2_sum << endl;*/
   }
 }
+
+
+
+
 
 
 

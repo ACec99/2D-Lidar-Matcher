@@ -47,7 +47,7 @@ public:
   
       // The pose of the base_link frame wrt map frame.
       Eigen::Isometry2f MTB() const {return _MTL*(_BTL.inverse());}
-      void updateMTL() {_MTL=_MTL*_X;}; //update the isometry
+      void updateMTL() {_MTL=_MTL*X();}; //update the isometry
       
       void updateOld(){
       _fixed.swap(_moving);
@@ -59,9 +59,9 @@ public:
 		
 		else return 0;
 	}*/
-       void ValuesInsertion(bool ok, const int idx, Eigen::Vector2f value){
-       		if(ok) _moving[idx]=value;
-       		else _fixed[idx]=value;
+       void ValuesInsertion(bool Moving_or_Fixed, const int i, Eigen::Vector2f value){
+       		if(Moving_or_Fixed) _moving[i]=value;
+       		else _fixed[i]=value;
   	}
   
   inline int numCorrespondences() const {return _correspondences.size();}
@@ -75,7 +75,7 @@ protected:
   using TreeNodeType = TreeNode_<typename ContainerType::iterator>;
   ContainerType _fixed;
   ContainerType _moving;
-  Eigen::Isometry2f _X; //Eigen::Isometry2f::Identity();
+  Eigen::Isometry2f _X=Eigen::Isometry2f::Identity();//Eigen::Isometry2f::Identity();
  
   Eigen::Isometry2f _BTL; //The pose of the laser_frame wrt base_link
 
@@ -92,5 +92,3 @@ protected:
   int _num_inliers=0;
   Eigen::Matrix<float, 3,1> _dx;
 };
-
-

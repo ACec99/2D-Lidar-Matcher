@@ -48,7 +48,7 @@ const Eigen::Isometry2f getTransform(const std::string& from, const std::string&
 		//take the translation and rotation 
 		Transformation.linear()=Rtheta(yaw); 
 		Transformation.translation()=Vector2f(tr.x, tr.y);
-		cerr << "transformation" << from << "->" << to << "done" << endl;
+		//cerr << "transformation" << from << "->" << to << "done" << endl;
 	}
 	catch ( tf::TransformException& e ) {
 		std::cout << e.what();
@@ -63,36 +63,35 @@ void LaserCallBack(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
 	//for a sensor_msgs::LaserScan we have:
 	//float32 angle_min = start angle of the scan [rad]
 	//float32 angle_max = end angle of the scan [rad]
-	//float32 angle_increment = angular distance between measurements [rad] = angular distance between consecutive different value of ranges ( ex. angular distance between ranges[i] and ranges[i+1])
+	//float32 angle_increment = angular distance between measurements [rad] = 
+	//angular distance between consecutive different value of ranges ( ex. angular distance between ranges[i] and ranges[i+1])
 	float angle_min = scan_in->angle_min;
 	float angle_max = scan_in->angle_max;
 	float angle_increment = scan_in->angle_increment;
-	float size = std::ceil((angle_max-angle_min)/angle_increment); //in this way I have calculated the value of the angular distance of each sample
+	float size = std::ceil((angle_max-angle_min)/angle_increment); 
 	//cerr << "this is the current num_groups" << num_groups << endl;
-	bool Fixed_or_Moving;
+	bool Moving_or_Fixed;
 	if (num_groups == 0) {
 		Eigen::Isometry2f MTB=getTransform("map","base_link");
 		Eigen::Isometry2f BTL=getTransform("base_link","base_laser_link");
 		Eigen::Isometry2f MTL = MTB*BTL;
 		ICPLaser = std::unique_ptr<ICP>(new ICP(BTL,MTL,20,size));
-		Fixed_or_Moving = true;
+		Moving_or_Fixed = true;
 	}
 	else if ( num_groups == 1 ) {
-		Fixed_or_Moving = false;
+		Moving_or_Fixed = false;
 	}
 	else {
 		ICPLaser->updateOld();
-		Fixed_or_Moving = false;
+		Moving_or_Fixed = false;
 	}
 	int angle = angle_min;
-	int idx=0;
 	for (int i=0; i<size; i++) {
 		float value = scan_in->ranges[i];
 		angle += angle_increment;
-		idx ++;
 		float val_x = value*cos(angle);
 		float val_y = value*sin(angle);
-		ICPLaser->ValuesInsertion(Fixed_or_Moving,idx,Eigen::Vector2f(val_x,val_y));
+		ICPLaser->ValuesInsertion(Moving_or_Fixed,i,Eigen::Vector2f(val_x,val_y));
 	}
 	num_groups += 1;
 	if ( num_groups == 1 ) { //this because if we still have only one group (a moving group of points) we cannot make nothing. 
@@ -156,19 +155,19 @@ int main(int argc, char **argv) {
 	
 	ros::NodeHandle n; //initialization of a node
 	
-	vel_pub = n.advertise<geometry_msgs::Pose2D>("/pose2D", 1000); //I write on the /pose2D topic the coordinates of the position of the robot 
-	
 	tf2_ros::TransformListener tfListene(listener);
 	
 	//ROS_INFO("Sono prima del vel_sub");
 	ros::Subscriber vel_sub = n.subscribe("/base_scan",1000,LaserCallBack); //I read the lasercan and update the Pose2D
 	//ROS_INFO("Sono dopo il vel_sub");
 	
+	vel_pub = n.advertise<geometry_msgs::Pose2D>("/pose2D", 1000); //I write on the /pose2D topic the coordinates of the position of the robot 
+	
 	ros::spin(); //if you are subscribing to messages, services or actions, you must call spin to process the event
-	ros::shutdown();
 	
 	return 0;
 }
+
 
 
 
