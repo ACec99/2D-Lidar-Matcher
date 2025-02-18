@@ -48,7 +48,7 @@ This project implements a 2D scan matcher that takes 2D laser scans as input and
   rosrun lidar_matcher lidar_matcher
   ```
 
-- at this point the map frame is created and so, we can change from "odom" to "map" our fixed frame
+- at this point the map frame is created and so, we can change from *odom* to *map* our fixed frame
 
 - start to move the robot with the keyboard and look at the transformations calculated by my project.
   
